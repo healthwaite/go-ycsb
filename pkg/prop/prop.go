@@ -105,13 +105,14 @@ const (
 	SilenceDefault = true
 
 	KeyPrefix        = "keyprefix"
-	KeyPrefixDefault = "user"
+	KeyPrefixDefault = "k"
 
 	LogInterval = "measurement.interval"
 
-	MeasurementType          = "measurementtype"
-	MeasurementTypeDefault   = "histogram"
-	MeasurementRawOutputFile = "measurement.output_file"
+	MeasurementType                 = "measurementtype"
+	MeasurementTypeDefault          = "histogram"
+	MeasurementRawOutputFile        = "measurement.output_file"
+	MeasurementRawOutputFileDefault = "/results.csv"
 
 	Command = "command"
 
@@ -122,4 +123,7 @@ const (
 	MeasurementHistogramPercentileExportDefault         = false
 	MeasurementHistogramPercentileExportFilepath        = "histogram.percentiles.export.filepath"
 	MeasurementHistogramPercentileExportFilepathDefault = "./"
+
+	KeyLength        = "keylength"
+	KeyLengthDefault = 17
 )

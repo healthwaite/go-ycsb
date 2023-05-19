@@ -28,13 +28,15 @@ import (
 )
 
 const (
-	tikvAsyncCommit = "tikv.async_commit"
-	tikvOnePC       = "tikv.one_pc"
+	tikvAsyncCommit       = "tikv.async_commit"
+	tikvOnePC             = "tikv.one_pc"
+	tikvCausalConsistency = "tikv.causal_consistency"
 )
 
 type txnConfig struct {
-	asyncCommit bool
-	onePC       bool
+	causalConsistency bool
+	asyncCommit       bool
+	onePC             bool
 }
 
 type txnDB struct {
@@ -52,8 +54,9 @@ func createTxnDB(p *properties.Properties) (ycsb.DB, error) {
 	}
 
 	cfg := txnConfig{
-		asyncCommit: p.GetBool(tikvAsyncCommit, true),
-		onePC:       p.GetBool(tikvOnePC, true),
+		asyncCommit:       p.GetBool(tikvAsyncCommit, true),
+		onePC:             p.GetBool(tikvOnePC, true),
+		causalConsistency: p.GetBool(tikvCausalConsistency, false),
 	}
 
 	bufPool := util.NewBufPool()
@@ -89,6 +92,7 @@ func (db *txnDB) beginTxn() (*transaction.KVTxn, error) {
 
 	txn.SetEnableAsyncCommit(db.cfg.asyncCommit)
 	txn.SetEnable1PC(db.cfg.onePC)
+	txn.SetCausalConsistency(db.cfg.causalConsistency)
 
 	return txn, err
 }
@@ -99,6 +103,7 @@ func (db *txnDB) Read(ctx context.Context, table string, key string, fields []st
 		return nil, err
 	}
 	defer tx.Rollback()
+	tx.SetCausalConsistency(db.cfg.causalConsistency)
 
 	row, err := tx.Get(ctx, db.getRowKey(table, key))
 	if tikverr.IsErrNotFound(err) {
@@ -120,6 +125,7 @@ func (db *txnDB) BatchRead(ctx context.Context, table string, keys []string, fie
 		return nil, err
 	}
 	defer tx.Rollback()
+	tx.SetCausalConsistency(db.cfg.causalConsistency)
 
 	rowValues := make([]map[string][]byte, len(keys))
 	for i, key := range keys {
@@ -139,6 +145,8 @@ func (db *txnDB) BatchRead(ctx context.Context, table string, keys []string, fie
 
 func (db *txnDB) Scan(ctx context.Context, table string, startKey string, count int, fields []string) ([]map[string][]byte, error) {
 	tx, err := db.db.Begin()
+	tx.SetCausalConsistency(db.cfg.causalConsistency)
+
 	if err != nil {
 		return nil, err
 	}

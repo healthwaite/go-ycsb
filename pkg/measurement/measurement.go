@@ -45,6 +45,12 @@ func (m *measurement) output() {
 	m.RLock()
 	defer m.RUnlock()
 
+	measurementType := m.p.GetString(prop.MeasurementType, prop.MeasurementTypeDefault)
+	if measurementType == "csv-file" {
+		globalMeasure.measurer.Output(nil)
+		return
+	}
+
 	outFile := m.p.GetString(prop.MeasurementRawOutputFile, "")
 	var w *bufio.Writer
 	if outFile == "" {
@@ -85,6 +91,9 @@ func InitMeasure(p *properties.Properties) {
 		globalMeasure.measurer = InitHistograms(p)
 	case "raw", "csv":
 		globalMeasure.measurer = InitCSV()
+	case "csv-file":
+		csvFile := p.GetString(prop.MeasurementRawOutputFile, prop.MeasurementRawOutputFileDefault)
+		globalMeasure.measurer = InitCSVFile(csvFile)
 	default:
 		panic("unsupported measurement type: " + measurementType)
 	}

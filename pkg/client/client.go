@@ -205,6 +205,12 @@ func (c *Client) Run(ctx context.Context) {
 		}
 	}()
 
+	var cancel context.CancelFunc
+	executionTime := c.p.GetParsedDuration(prop.MaxExecutiontime, 0)
+	if executionTime != 0 {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+
 	for i := 0; i < threadCount; i++ {
 		go func(threadId int) {
 			defer wg.Done()
@@ -216,6 +222,16 @@ func (c *Client) Run(ctx context.Context) {
 			c.db.CleanupThread(ctx)
 			c.workload.CleanupThread(ctx)
 		}(i)
+	}
+
+	if executionTime != 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(executionTime):
+			fmt.Printf("MaxExecutiontime (%v) exceeded, cancelling workers\n", executionTime)
+			cancel()
+		}
 	}
 
 	wg.Wait()

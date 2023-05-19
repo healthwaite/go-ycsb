@@ -166,7 +166,13 @@ func (c *core) buildKeyName(keyNum int64) string {
 	}
 
 	prefix := c.p.GetString(prop.KeyPrefix, prop.KeyPrefixDefault)
-	return fmt.Sprintf("%s%0[3]*[2]d", prefix, keyNum, c.zeroPadding)
+	key := fmt.Sprintf("%s%016x", prefix, keyNum)
+
+	wantKeyLength := c.p.GetInt(prop.KeyLength, prop.KeyLengthDefault)
+	if len(key) != wantKeyLength {
+		panic(fmt.Sprintf("%s=%d %s=%s gotKeyLength=%d key=%s", prop.KeyLength, wantKeyLength, prop.KeyPrefix, prefix, len(key), key))
+	}
+	return key
 }
 
 func (c *core) buildSingleValue(state *coreState, key string) map[string][]byte {

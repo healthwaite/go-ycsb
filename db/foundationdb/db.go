@@ -182,6 +182,111 @@ func (db *fDB) Insert(ctx context.Context, table string, key string, values map[
 	return err
 }
 
+func (db *fDB) BatchRead(ctx context.Context, table string, keys []string, fields []string) ([]map[string][]byte, error) {
+	rowValues := make([]map[string][]byte, len(keys))
+
+	_, err := db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
+		futures := make([]fdb.FutureByteSlice, len(keys))
+		for i, key := range keys {
+			f := tr.Get(fdb.Key(key))
+			futures[i] = f
+		}
+
+		for i, future := range futures {
+			value := future.MustGet()
+			if value == nil {
+				rowValues[i] = nil
+			} else {
+				value, err := db.r.Decode(value, fields)
+				if err != nil {
+					return nil, err
+				}
+
+				rowValues[i] = value
+			}
+		}
+
+		return nil, nil
+	})
+
+	return rowValues, err
+}
+
+func (db *fDB) BatchInsert(ctx context.Context, table string, keys []string, values []map[string][]byte) error {
+	_, err := db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
+		for i, key := range keys {
+			value, err := db.r.Encode(nil, values[i])
+			if err != nil {
+				return nil, err
+			}
+
+			rowKey := db.getRowKey(table, key)
+			tr.Set(fdb.Key(rowKey), value)
+		}
+
+		return nil, nil
+	})
+
+	return err
+}
+
+func (db *fDB) BatchDelete(ctx context.Context, table string, keys []string) error {
+	_, err := db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
+		for _, key := range keys {
+			rowKey := db.getRowKey(table, key)
+			tr.Clear(fdb.Key(rowKey))
+		}
+
+		return nil, nil
+	})
+
+	return err
+}
+
+func (db *fDB) BatchUpdate(ctx context.Context, table string, keys []string, values []map[string][]byte) error {
+	_, err := db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
+		// Start the reads
+		futures := make([]fdb.FutureByteSlice, len(keys))
+		for i, key := range keys {
+			f := tr.Get(fdb.Key(key))
+			futures[i] = f
+		}
+
+		// Do the updates
+		for i, future := range futures {
+			curValuesRaw := future.MustGet()
+			if curValuesRaw == nil {
+				// TODO: What to do if the key does not exist?
+			} else {
+				data, err := db.r.Decode(curValuesRaw, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				for field, value := range values[i] {
+					data[field] = value
+				}
+
+				buf := db.bufPool.Get()
+				defer func() {
+					db.bufPool.Put(buf)
+				}()
+
+				buf, err = db.r.Encode(nil, data)
+				if err != nil {
+					return nil, err
+				}
+
+				tr.Set(fdb.Key(keys[i]), buf)
+			}
+		}
+
+		return nil, nil
+	})
+
+	return err
+}
+
 func (db *fDB) Delete(ctx context.Context, table string, key string) error {
 	rowKey := db.getRowKey(table, key)
 	_, err := db.db.Transact(func(tr fdb.Transaction) (ret interface{}, e error) {
